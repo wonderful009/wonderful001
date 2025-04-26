@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投标报价评分计算器</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+            text-align: center;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        input[type="number"], input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .method-selector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+        .method-btn {
+            width: 300px;
+            margin: 10px;
+            padding: 15px;
+            font-size: 16px;
+        }
+        .back-btn {
+            background-color: #f44336;
+        }
+        .back-btn:hover {
+            background-color: #d32f2f;
+        }
+        .hidden {
+            display: none;
+        }
+        .result {
+            font-weight: bold;
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e7f3fe;
+            border-left: 6px solid #2196F3;
+        }
+        .params {
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-radius: 4px;
+        }
+        .param-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+        .param-item {
+            display: flex;
+            align-items: center;
+        }
+        .param-item label {
+            margin-right: 8px;
+            white-space: nowrap;
+        }
+        .param-item input {
+            width: 80px;
+        }
+        .result-table th, .result-table td {
+            text-align: center;
+        }
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin-top: 20px;
+            position: relative;
+        }
+        .chart-label {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 12px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 方法选择界面 -->
+        <div id="method-selection">
+            <h1>请选择评标办法</h1>
+            <div class="method-selector">
+                <button class="method-btn" onclick="showMethod(1)">1、最低报价为评标基准价</button>
+                <button class="method-btn" onclick="showMethod(2)">2、平均价为评标基准价</button>
+                <button class="method-btn" onclick="showMethod(3)">3、省行项目先加后减</button>
+            </div>
+        </div>
+
+        <!-- 方法1: 最低报价为评标基准价 -->
+        <div id="method1" class="hidden">
+            <h2>最低报价为评标基准价</h2>
+            <p>评标基准价计算方法：采用最低报价为评标基准价。</p>
+            
+            <div class="params">
+                <div class="param-group">
+                    <div class="param-item">
+                        <label>等于基准价得分:</label>
+                        <input type="number" id="method1-base-score" value="100" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>每递升1%减:</label>
+                        <input type="number" id="method1-up-penalty" value="1" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>最高得分:</label>
+                        <input type="number" id="method1-max-score" value="100" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>最低得分:</label>
+                        <input type="number" id="method1-min-score" value="0" min="0" step="0.01">
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <table id="bid-table1">
+                    <thead>
+                        <tr>
+                            <th>投标人名称</th>
+                            <th>报价(元)</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="text" placeholder="投标人名称"></td>
+                            <td><input type="number" placeholder="报价" step="0.01"></td>
+                            <td><button onclick="removeRow(this)">删除</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button onclick="addRow('bid-table1')">添加投标人</button>
+                <button onclick="calculateMethod1()">计算评分</button>
+                <button class="back-btn" onclick="backToSelection()">返回</button>
+                <div id="result1" class="result hidden"></div>
+                <div class="chart-container">
+                    <canvas id="chart1"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 方法2: 平均价为评标基准价 -->
+        <div id="method2" class="hidden">
+            <h2>平均价为评标基准价</h2>
+            <p>评标基准价计算方法：采用所有单位的平均价为评标基准价。</p>
+            
+            <div class="params">
+                <div class="param-group">
+                    <div class="param-item">
+                        <label>等于基准价得分:</label>
+                        <input type="number" id="method2-base-score" value="100" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>每递升1%减:</label>
+                        <input type="number" id="method2-up-penalty" value="1" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>每递降1%减:</label>
+                        <input type="number" id="method2-down-penalty" value="1" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>最高得分:</label>
+                        <input type="number" id="method2-max-score" value="100" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>最低得分:</label>
+                        <input type="number" id="method2-min-score" value="0" min="0" step="0.01">
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <table id="bid-table2">
+                    <thead>
+                        <tr>
+                            <th>投标人名称</th>
+                            <th>报价(元)</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="text" placeholder="投标人名称"></td>
+                            <td><input type="number" placeholder="报价" step="0.01"></td>
+                            <td><button onclick="removeRow(this)">删除</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button onclick="addRow('bid-table2')">添加投标人</button>
+                <button onclick="calculateMethod2()">计算评分</button>
+                <button class="back-btn" onclick="backToSelection()">返回</button>
+                <div id="result2" class="result hidden"></div>
+                <div class="chart-container">
+                    <canvas id="chart2"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 方法3: 省行项目先加后减 -->
+        <div id="method3" class="hidden">
+            <h2>省行项目先加后减</h2>
+            <p>评标基准价计算方法：采用所有单位的平均价为评标基准价。</p>
+            
+            <div class="params">
+                <div class="param-group">
+                    <div class="param-item">
+                        <label>等于基准价得分:</label>
+                        <input type="number" id="method3-base-score" value="45" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>每递升1%减:</label>
+                        <input type="number" id="method3-up-penalty" value="1" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>每递降1%加:</label>
+                        <input type="number" id="method3-down-penalty" value="1" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>低于基准价的%:</label>
+                        <input type="number" id="method3-threshold" value="10" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>每减少1%扣:</label>
+                        <input type="number" id="method3-below-penalty" value="1" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>最高得分:</label>
+                        <input type="number" id="method3-max-score" value="55" min="0" step="0.01">
+                    </div>
+                    <div class="param-item">
+                        <label>最低得分:</label>
+                        <input type="number" id="method3-min-score" value="0" min="0" step="0.01">
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <table id="bid-table3">
+                    <thead>
+                        <tr>
+                            <th>投标人名称</th>
+                            <th>报价(元)</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="text" placeholder="投标人名称"></td>
+                            <td><input type="number" placeholder="报价" step="0.01"></td>
+                            <td><button onclick="removeRow(this)">删除</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button onclick="addRow('bid-table3')">添加投标人</button>
+                <button onclick="calculateMethod3()">计算评分</button>
+                <button class="back-btn" onclick="backToSelection()">返回</button>
+                <div id="result3" class="result hidden"></div>
+                <div class="chart-container">
+                    <canvas id="chart3"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 图表实例
+        let chart1 = null;
+        let chart2 = null;
+        let chart3 = null;
+
+        // 显示选定的方法
+        function showMethod(methodNum) {
+            document.getElementById('method-selection').classList.add('hidden');
+            document.getElementById('method1').classList.add('hidden');
+            document.getElementById('method2').classList.add('hidden');
+            document.getElementById('method3').classList.add('hidden');
+            document.getElementById('method' + methodNum).classList.remove('hidden');
+        }
+
+        // 返回方法选择界面
+        function backToSelection() {
+            document.getElementById('method-selection').classList.remove('hidden');
+            document.getElementById('method1').classList.add('hidden');
+            document.getElementById('method2').classList.add('hidden');
+            document.getElementById('method3').classList.add('hidden');
+            
+            // 清空结果
+            document.getElementById('result1').classList.add('hidden');
+            document.getElementById('result2').classList.add('hidden');
+            document.getElementById('result3').classList.add('hidden');
+        }
+
+        // 添加新行
+        function addRow(tableId) {
+            const table = document.getElementById(tableId);
+            const tbody = table.querySelector('tbody');
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td><input type="text" placeholder="投标人名称"></td>
+                <td><input type="number" placeholder="报价" step="0.01"></td>
+                <td><button onclick="removeRow(this)">删除</button></td>
+            `;
+            tbody.appendChild(newRow);
+        }
+
+        // 删除行
+        function removeRow(button) {
+            const row = button.parentNode.parentNode;
+            row.parentNode.removeChild(row);
+        }
+
+        // 更新图表
+        function updateChart(chartId, bidders, scores) {
+            const ctx = document.getElementById(chartId).getContext('2d');
+            
+            // 如果图表已存在，先销毁
+            if (chartId === 'chart1' && chart1) {
+                chart1.destroy();
+            } else if (chartId === 'chart2' && chart2) {
+                chart2.destroy();
+            } else if (chartId === 'chart3' && chart3) {
+                chart3.destroy();
+            }
+            
+            // 创建新图表
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: bidders,
+                    datasets: [{
+                        label: '投标人得分',
+                        data: scores,
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        fill: false,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '得分'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '投标人名称'
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return '得分: ' + context.parsed.y.toFixed(2);
+                                }
+                            }
+                        },
+                        datalabels: {
+                            display: false
+                        }
+                    }
+                },
+                plugins: [{
+                    id: 'customDataLabels',
+                    afterDatasetsDraw(chart, args, options) {
+                        const {ctx, data, chartArea: {top, bottom, left, right, width, height}, scales: {x, y}} = chart;
+                        
+                        ctx.font = '12px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        
+                        chart.data.datasets.forEach((dataset, i) => {
+                            dataset.data.forEach((datapoint, index) => {
+                                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                                ctx.fillText(datapoint.toFixed(2), x.getPixelForValue(index), y.getPixelForValue(datapoint) - 5);
+                            });
+                        });
+                    }
+                }]
+            });
+            
+            // 保存图表实例
+            if (chartId === 'chart1') {
+                chart1 = chart;
+            } else if (chartId === 'chart2') {
+                chart2 = chart;
+            } else if (chartId === 'chart3') {
+                chart3 = chart;
+            }
+        }
+
+        // 方法1计算
+        function calculateMethod1() {
+            const table = document.getElementById('bid-table1');
+            const rows = table.querySelectorAll('tbody tr');
+            const bids = [];
+            const bidders = [];
+            
+            // 获取参数
+            const maxScore = parseFloat(document.getElementById('method1-max-score').value) || 100;
+            const minScore = parseFloat(document.getElementById('method1-min-score').value) || 0;
+            const baseScore = parseFloat(document.getElementById('method1-base-score').value) || 100;
+            const upPenalty = parseFloat(document.getElementById('method1-up-penalty').value) || 1;
+            
+            // 收集投标数据
+            rows.forEach(row => {
+                const inputs = row.querySelectorAll('input');
+                const bidder = inputs[0].value || '匿名投标人';
+                const bid = parseFloat(inputs[1].value);
+                
+                if (!isNaN(bid)) {
+                    bidders.push(bidder);
+                    bids.push(bid);
+                }
+            });
+            
+            if (bids.length === 0) {
+                alert('请输入有效的报价数据');
+                return;
+            }
+            
+            // 计算基准价（最低报价）
+            const benchmark = Math.min(...bids);
+            const scores = [];
+            
+            // 计算每个投标人的得分
+            let resultHTML = '<h3>计算结果</h3><table class="result-table"><tr><th>投标人</th><th>报价</th><th>评标基准价</th><th>偏差率</th><th>得分</th></tr>';
+            
+            for (let i = 0; i < bids.length; i++) {
+                const bid = bids[i];
+                const deviation = ((bid - benchmark) / benchmark) * 100;
+                let score;
+                
+                if (deviation === 0) {
+                    score = baseScore;
+                } else if (deviation > 0) {
+                    // 偏差率大于0：偏差率从0开始每递升1％减指定分数
+                    score = baseScore - Math.floor(deviation) * upPenalty;
+                    
+                    // 处理不足1%的部分
+                    const fraction = deviation - Math.floor(deviation);
+                    if (fraction > 0) {
+                        score -= fraction * upPenalty;
+                    }
+                }
+                
+                // 限制得分在最高分和最低分之间
+                score = Math.max(minScore, Math.min(maxScore, score));
+                scores.push(score);
+                
+                resultHTML += `<tr>
+                    <td>${bidders[i]}</td>
+                    <td>${bid.toFixed(2)}</td>
+                    <td>${benchmark.toFixed(2)}</td>
+                    <td>${deviation.toFixed(2)}%</td>
+                    <td>${score.toFixed(2)}</td>
+                </tr>`;
+            }
+            
+            resultHTML += `</table>`;
+            
+            const resultDiv = document.getElementById('result1');
+            resultDiv.innerHTML = resultHTML;
+            resultDiv.classList.remove('hidden');
+            
+            // 更新图表
+            updateChart('chart1', bidders, scores);
+        }
+
+        // 方法2计算
+        function calculateMethod2() {
+            const table = document.getElementById('bid-table2');
+            const rows = table.querySelectorAll('tbody tr');
+            const bids = [];
+            const bidders = [];
+            
+            // 获取参数
+            const maxScore = parseFloat(document.getElementById('method2-max-score').value) || 100;
+            const minScore = parseFloat(document.getElementById('method2-min-score').value) || 0;
+            const baseScore = parseFloat(document.getElementById('method2-base-score').value) || 100;
+            const upPenalty = parseFloat(document.getElementById('method2-up-penalty').value) || 1;
+            const downPenalty = parseFloat(document.getElementById('method2-down-penalty').value) || 1;
+            
+            // 收集投标数据
+            rows.forEach(row => {
+                const inputs = row.querySelectorAll('input');
+                const bidder = inputs[0].value || '匿名投标人';
+                const bid = parseFloat(inputs[1].value);
+                
+                if (!isNaN(bid)) {
+                    bidders.push(bidder);
+                    bids.push(bid);
+                }
+            });
+            
+            if (bids.length === 0) {
+                alert('请输入有效的报价数据');
+                return;
+            }
+            
+            // 计算基准价（平均价）
+            const sum = bids.reduce((a, b) => a + b, 0);
+            const benchmark = sum / bids.length;
+            const scores = [];
+            
+            // 计算每个投标人的得分
+            let resultHTML = '<h3>计算结果</h3><table class="result-table"><tr><th>投标人</th><th>报价</th><th>评标基准价</th><th>偏差率</th><th>得分</th></tr>';
+            
+            for (let i = 0; i < bids.length; i++) {
+                const bid = bids[i];
+                const deviation = ((bid - benchmark) / benchmark) * 100;
+                let score;
+                
+                if (deviation === 0) {
+                    score = baseScore;
+                } else if (deviation > 0) {
+                    // 偏差率大于0：偏差率从0开始每递升1％减指定分数
+                    score = baseScore - Math.floor(deviation) * upPenalty;
+                    
+                    // 处理不足1%的部分
+                    const fraction = deviation - Math.floor(deviation);
+                    if (fraction > 0) {
+                        score -= fraction * upPenalty;
+                    }
+                } else {
+                    // 偏差率小于0：偏差率从0开始每递降1％减指定分数
+                    const absDeviation = Math.abs(deviation);
+                    score = baseScore - Math.floor(absDeviation) * downPenalty;
+                    
+                    // 处理不足1%的部分
+                    const fraction = absDeviation - Math.floor(absDeviation);
+                    if (fraction > 0) {
+                        score -= fraction * downPenalty;
+                    }
+                }
+                
+                // 限制得分在最高分和最低分之间
+                score = Math.max(minScore, Math.min(maxScore, score));
+                scores.push(score);
+                
+                resultHTML += `<tr>
+                    <td>${bidders[i]}</td>
+                    <td>${bid.toFixed(2)}</td>
+                    <td>${benchmark.toFixed(2)}</td>
+                    <td>${deviation.toFixed(2)}%</td>
+                    <td>${score.toFixed(2)}</td>
+                </tr>`;
+            }
+            
+            resultHTML += `</table>`;
+            
+            const resultDiv = document.getElementById('result2');
+            resultDiv.innerHTML = resultHTML;
+            resultDiv.classList.remove('hidden');
+            
+            // 更新图表
+            updateChart('chart2', bidders, scores);
+        }
+
+        // 方法3计算
+        function calculateMethod3() {
+            const table = document.getElementById('bid-table3');
+            const rows = table.querySelectorAll('tbody tr');
+            const bids = [];
+            const bidders = [];
+            
+            // 获取参数
+            const maxScore = parseFloat(document.getElementById('method3-max-score').value) || 100;
+            const minScore = parseFloat(document.getElementById('method3-min-score').value) || 0;
+            const baseScore = parseFloat(document.getElementById('method3-base-score').value) || 100;
+            const upPenalty = parseFloat(document.getElementById('method3-up-penalty').value) || 0.5;
+            const downPenalty = parseFloat(document.getElementById('method3-down-penalty').value) || 1;
+            const threshold = parseFloat(document.getElementById('method3-threshold').value) || 10;
+            const belowPenalty = parseFloat(document.getElementById('method3-below-penalty').value) || 0.5;
+            
+            // 收集投标数据
+            rows.forEach(row => {
+                const inputs = row.querySelectorAll('input');
+                const bidder = inputs[0].value || '匿名投标人';
+                const bid = parseFloat(inputs[1].value);
+                
+                if (!isNaN(bid) && bidder) {
+                    bidders.push(bidder);
+                    bids.push(bid);
+                }
+            });
+            
+            if (bids.length === 0) {
+                alert('请输入有效的报价数据');
+                return;
+            }
+            
+            // 计算基准价（平均价）
+            const sum = bids.reduce((a, b) => a + b, 0);
+            const benchmark = sum / bids.length;
+            const scores = [];
+            
+            // 计算每个投标人的得分
+            let resultHTML = '<h3>计算结果</h3><table class="result-table"><tr><th>投标人</th><th>报价</th><th>评标基准价</th><th>偏差率</th><th>得分</th></tr>';
+            
+            for (let i = 0; i < bids.length; i++) {
+                const bid = bids[i];
+                const deviation = ((bid - benchmark) / benchmark) * 100;
+                let score;
+                
+                if (deviation === 0) {
+                    score = baseScore;
+                } else if (deviation > 0) {
+                    // 偏差率大于0：偏差率从0开始每递升1％减指定分数
+                    score = baseScore - Math.floor(deviation) * upPenalty;
+                    
+                    // 处理不足1%的部分
+                    const fraction = deviation - Math.floor(deviation);
+                    if (fraction > 0) {
+                        score -= fraction * upPenalty;
+                    }
+                } else {
+                    // 偏差率小于0
+                    const absDeviation = Math.abs(deviation);
+                    
+                    if (absDeviation <= threshold) {
+                        // 偏差率从0开始每递降1％加指定分数（阈值%以内）
+                        score = baseScore + Math.floor(absDeviation) * downPenalty;
+                        
+                        // 处理不足1%的部分
+                        const fraction = absDeviation - Math.floor(absDeviation);
+                        if (fraction > 0) {
+                            score += fraction * downPenalty;
+                        }
+                    } else {
+                        // 阈值%以内的部分
+                        score = baseScore + threshold * downPenalty;
+                        
+                        // 超过阈值%的部分：每减少1％，倒扣指定分数
+                        const excess = absDeviation - threshold;
+                        score -= Math.floor(excess) * belowPenalty;
+                        
+                        // 处理不足1%的部分
+                        const fraction = excess - Math.floor(excess);
+                        if (fraction > 0) {
+                            score -= fraction * belowPenalty;
+                        }
+                    }
+                }
+                
+                // 限制得分在最高分和最低分之间
+                score = Math.max(minScore, Math.min(maxScore, score));
+                scores.push(score);
+                
+                resultHTML += `<tr>
+                    <td>${bidders[i]}</td>
+                    <td>${bid.toFixed(2)}</td>
+                    <td>${benchmark.toFixed(2)}</td>
+                    <td>${deviation.toFixed(2)}%</td>
+                    <td>${score.toFixed(2)}</td>
+                </tr>`;
+            }
+            
+            resultHTML += `</table>`;
+            
+            const resultDiv = document.getElementById('result3');
+            resultDiv.innerHTML = resultHTML;
+            resultDiv.classList.remove('hidden');
+            
+            // 更新图表
+            updateChart('chart3', bidders, scores);
+        }
+    </script>
+</body>
+</html>
